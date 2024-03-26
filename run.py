@@ -29,7 +29,8 @@ class Resposta(db.Model):
     
 @app.route('/api/enquetes', methods=['GET'])
 def get_enquetes():
-    enquetes = Enquete.query.all()
+    enquetes = Enquete.query.filter_by(ativo=True).all()
+    enquetes_list = []
     
     for enquete in enquetes:
         enquete_data = {
@@ -40,8 +41,9 @@ def get_enquetes():
             'data_criacao': enquete.data_criacao,
             'ativo': enquete.ativo
         }
+        enquetes_list.append(enquete_data)
     
-    return jsonify(enquete_data), 200
+    return jsonify(enquetes_list), 200
 
 @app.route('/api/enquete', methods=['POST'])
 def create_enquete():
@@ -53,7 +55,7 @@ def create_enquete():
     new_enquete = Enquete(titulo=data['titulo'], descricao=data['descricao'], texto_questao=data['texto_questao'], data_criacao=datetime.date.today(), ativo=True)
     db.session.add(new_enquete)
     db.session.commit()
-    return jsonify({"message": "User created successfully"}), 200
+    return jsonify({"message": "Enquete created successfully"}), 200
 
 @app.route('/api/enquetes/<int:id_enquete>', methods=['GET'])
 def get_enquete(id_enquete):
@@ -97,14 +99,22 @@ def create_opcao(id_enquete):
     if enquete is None:
         return jsonify({"message": "Enquete not found"}), 404
     
-    new_opcao = Opcao(id_enquete=id_enquete, texto_opcao=data['texto_opcao'], ativo=True)
+    texto_opcao = data.get('texto_opcao', '').strip().lower() 
+   
+    existing_opcao = Opcao.query.filter_by(id_enquete=id_enquete, texto_opcao=texto_opcao).first()
+    
+    if existing_opcao:
+        return jsonify({"message": "Opção com mesmo texto já existe para esta enquete"}), 400
+    
+    new_opcao = Opcao(id_enquete=id_enquete, texto_opcao=texto_opcao, ativo=True)
     db.session.add(new_opcao)
     db.session.commit()
-    return jsonify({"message": "Opcao created successfully"}), 200
+    
+    return jsonify({"message": "Opção criada com sucesso"}), 200
 
 @app.route('/api/enquetes/<int:id_enquete>/opcao', methods=['GET'])
 def get_opcao(id_enquete):
-    opcoes = Opcao.query.filter_by(id_enquete=id_enquete).all()
+    opcoes = Opcao.query.filter_by(id_enquete=id_enquete, ativo=True).all()
     opcoes_list = []
     
     for opcao in opcoes:
@@ -140,7 +150,6 @@ def create_resposta(id_enquete):
 
 @app.route('/api/enquetes/<int:id_enquete>/respostas', methods=['GET'])
 def get_respostas(id_enquete):
-    # Realiza a contagem das respostas por opção para a enquete específica
     counts = db.session.query(Resposta.id_opcao, func.count()).filter_by(id_enquete=id_enquete).group_by(Resposta.id_opcao).all()
     
     counts_data = []
